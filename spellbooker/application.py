@@ -33,32 +33,68 @@ def collect_str(what):
     return result
 
 
-def list_spell(database_path, _):
-    with open(database_path, 'rU') as fin:
-        for line in fin:
-            obj = json.loads(line)
+def list_spell(database_path, _, ord=0):
+    with open(database_path, 'r') as fin:
+        data = json.load(fin)
+    print(data)
+    for obj in data:
+        if(ord):
+            print(str(ord) + ': ' + obj['cmd'], obj['desc'], sep='\t::>>\t')
+            ord += 1
+        else:
             print(obj['cmd'], obj['desc'], sep='\t::>>\t')
 
 
-def search_spell(database_path, args):
+def search_spell(database_path, args, ord=0):
     what = args.data
     with open(database_path, 'rU') as fin:
-        for line in fin:
-            obj = json.loads(line)
-            for word in what:
-                if word in obj['cmd'] or word in obj['desc']:
-                    print(obj['cmd'])
-                    break
+        data = json.load(fin)
+    for obj in data:
+        for word in what:
+            if word in obj['cmd'] or word in obj['desc']:
+                print(obj['cmd'])
+                break
 
 
 def save_spell(database_path, cmd, desc):
     val = {
         'cmd': cmd,
-        'desc': desc
+        'desc': desc,
+        'ord': '-1'
     }
-    with open(database_path, 'a') as fout:
-        fout.write(str(json.dumps(val)))
-        fout.write('\n')
+    with open(database_path, 'r') as fin:
+        data = json.load(fin)    
+    data.append(val)
+    with open(database_path, 'w') as fout:
+        json.dump(data, fout)
+
+def rm_spell(database_path, args):
+    what = args.data
+    with open(database_path, 'rU') as fin:
+        data = json.load(fin)
+    ordinal = 1
+    for obj in data:
+        for word in what:
+            if word in obj['cmd'] or word in obj['desc']:
+                if(ord):
+                    print(str(ordinal) + ': ' + obj['cmd'])
+                    obj['ord']=str(ordinal)
+                    ordinal += 1
+                else:
+                    print(obj['cmd'])
+                break
+    if(ordinal == 1):
+        print('No command with that query found')
+    to_remove = int(collect_str("the number of the command you wish to delete, or -1 if none "))
+    if(to_remove == -1):
+        return
+    newdata = []
+    for obj in data:
+        if(obj['ord'] != str(to_remove)):
+            obj['ord'] = '-1'
+            newdata.append(obj)
+    with open(database_path, 'w') as fout:
+        json.dump(newdata, fout)
 
 
 def wrap_optional_spellbook(func, args):
@@ -115,7 +151,13 @@ def command_create(args):
         return
 
     # create empty file
-    open(database_path, 'a').close()
+    json.dump([], open(database_path, 'a'))
+
+def command_rm(args):
+    if(args.spellbook_name is None):
+        print("ERR: please enter an existing spellbook name")
+        return
+    wrap_optional_spellbook(rm_spell, args)
 
 
 def command_dropbox_connect(args):
@@ -233,15 +275,15 @@ def db_remove(dbx, spellbook_name):
 def db_merge(dbx, spellbook_name, rev):
     spellbook_path = os.path.join(MAIN_DIRECTORY, spellbook_name)
     with open(spellbook_path, 'rU') as fin:
-        local_spells = [json.loads(line) for line in fin]
+        local_spells = json.load(fin)
 
     metadata, http_resp = dbx.files_download('rev:%s' % rev)
-    local_spells.extend(json.loads(line.decode('utf-8')) for line in http_resp.iter_lines() if
-                        json.loads(line.decode('utf-8')) not in local_spells)
+    local_spells.update(json.load(line.decode('utf-8')) for line in http_resp.iter_lines() if
+                        json.load(line.decode('utf-8')) not in local_spells)
 
     with open(spellbook_path, 'w') as fout:
         for val in local_spells:
-            fout.write(str(json.dumps(val)))
+            fout.write(str(json.dump(val)))
             fout.write('\n')
 
     db_repo_update(spellbook_name, metadata.rev)
@@ -279,6 +321,10 @@ def prepare_parser():
 
     parser_create = subparsers.add_parser('create', help='create new spellbook')
     parser_create.set_defaults(func=command_create)
+
+    parser_remove = subparsers.add_parser('rm', help ='Search for and remove spells')
+    parser_remove.set_defaults(func=command_rm)
+    parser_remove.add_argument('data', nargs='*')
 
     if dropbox_available:
         parser_db_connect = subparsers.add_parser('connectdb', help='connect to dropbox storage')
