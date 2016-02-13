@@ -275,15 +275,15 @@ def db_remove(dbx, spellbook_name):
 def db_merge(dbx, spellbook_name, rev):
     spellbook_path = os.path.join(MAIN_DIRECTORY, spellbook_name)
     with open(spellbook_path, 'rU') as fin:
-        local_spells = json.load(fin)
+        local_spells = [json.loads(line) for line in fin]
 
     metadata, http_resp = dbx.files_download('rev:%s' % rev)
-    local_spells.update(json.load(line.decode('utf-8')) for line in http_resp.iter_lines() if
-                        json.load(line.decode('utf-8')) not in local_spells)
+    local_spells.extend(json.loads(line.decode('utf-8')) for line in http_resp.iter_lines() if
+                        json.loads(line.decode('utf-8')) not in local_spells)
 
     with open(spellbook_path, 'w') as fout:
         for val in local_spells:
-            fout.write(str(json.dump(val)))
+            fout.write(str(json.dumps(val)))
             fout.write('\n')
 
     db_repo_update(spellbook_name, metadata.rev)
@@ -299,7 +299,9 @@ def command_dropbox_sync(args):
     if args.spellbook_name is not None:
         print('ERR: sync is only for all books')
         return
-    db_sync()
+    print('This function may not be supported. Proceed with caution.')
+    if(collect_str("Proceed? y/N").lower() =='y'):
+        db_sync()
 
 
 def prepare_parser():
